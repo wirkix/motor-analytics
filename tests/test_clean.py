@@ -10,12 +10,20 @@ from ingest.clean import (
     normalize_text,
     stratified_sample,
 )
-from ingest.config import RAW_CSV_PATH
+from ingest.config import REPO_ROOT
+
+# Deliberately NOT ingest.config.RAW_CSV_PATH — that's env-driven (see
+# CLAUDE.md "Known gotchas") and points at the real ~426k-row Kaggle CSV
+# once RAW_CSV_PATH is set in .env for a real rebuild. These two tests
+# assert properties of the committed *synthetic* fixture (crafted to
+# contain exact-duplicate ids so dedupe has something to prove against) —
+# they must always read it directly, independent of .env.
+FIXTURE_CSV_PATH = REPO_ROOT / "data" / "fixtures" / "sample_listings.csv"
 
 
 @pytest.fixture(scope="module")
 def raw_df() -> pd.DataFrame:
-    return pd.read_csv(RAW_CSV_PATH, low_memory=False)
+    return pd.read_csv(FIXTURE_CSV_PATH, low_memory=False)
 
 
 def test_fixture_has_exact_duplicate_ids(raw_df):
