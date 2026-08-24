@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# Env
+.env
+.env.local
+
+# dbt
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+dbt/.user.yml
+
+# Data — the raw Kaggle CSV is ~1.45GB and never belongs in git. The built
+# data/motor_analytics.duckdb (small, post-sampling) is NOT ignored — see
+# .env.example and README for why it's committed.
+data/raw/*
+!data/raw/.gitkeep
+
+# Streamlit
+.streamlit/secrets.toml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/

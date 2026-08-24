@@ -1,0 +1,12 @@
+# Safe to commit: the only value here is env_var()-sourced. DUCKDB_PATH is
+# relative to wherever `dbt` is invoked from — always run dbt from the repo
+# root (`dbt build --project-dir dbt --profiles-dir dbt`), never `cd dbt &&
+# dbt build`, so this resolves to the same file ingest/enrich just wrote to.
+
+motor_analytics:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "{{ env_var('DUCKDB_PATH', 'data/motor_analytics.duckdb') }}"
+      threads: 4

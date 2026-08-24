@@ -1,0 +1,17 @@
+version: 2
+
+sources:
+  - name: raw
+    description: Written directly by the Python ingest/enrich stages (ingest/load_duckdb.py, enrich/run.py) — nothing upstream of this in dbt's view.
+    schema: raw
+    tables:
+      - name: used_car_listings
+        description: One row per Craigslist listing after Pandas cleaning (dedup, text normalization, numeric coercion) and manufacturer-stratified sampling. Not yet filtered for bad prices/years — that happens in stg_used_car_listings.
+        columns:
+          - name: id
+            tests: [not_null, unique]
+      - name: fx_inpc_daily
+        description: One row per calendar day in the listings' posting-date range, carrying the Banxico FX fix rate and INPC inflation index (both forward-filled from their native publish frequency — see enrich/banxico.py). is_fallback=true when built without a BANXICO_TOKEN.
+        columns:
+          - name: calendar_date
+            tests: [not_null, unique]

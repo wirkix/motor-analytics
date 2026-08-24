@@ -1,0 +1,147 @@
+version: 2
+
+models:
+  - name: fct_used_car_listing
+    description: >
+      The wide mart. One row per used-car listing, ~65 columns spanning
+      identity, listing metadata, brand/model, age/mileage, USD price,
+      Banxico-driven MXN price (nominal + inflation-adjusted), powertrain,
+      body/condition, and data-quality flags. Built deliberately wide
+      instead of star-schemed — see dbt/models/marts/fct_used_car_listing.sql
+      for the full rationale and the FX/inflation formula. This file's
+      column descriptions double as the schema context the Streamlit chat
+      agent gets in its system prompt (see app/schema_context.py).
+    columns:
+      - name: id
+        description: Craigslist's own listing id — stable natural key, no surrogate key needed for a single wide table.
+        tests: [not_null, unique]
+      - name: region
+        description: Craigslist region/metro name (e.g. "dallas / fort worth"), lowercased. "unknown" if missing.
+      - name: state
+        description: Two-letter US state code, lowercased. "unknown" if missing.
+      - name: state_region_group
+        description: US Census region (Northeast/Midwest/South/West) derived from state.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['Northeast', 'Midwest', 'South', 'West', 'unknown']
+      - name: is_border_state
+        description: True for TX/CA/AZ/NM — the four US states bordering Mexico, relevant to the Kavak/LatAm angle of this project.
+      - name: lat
+        description: Listing latitude, nullable.
+      - name: long
+        description: Listing longitude, nullable.
+      - name: posting_date
+        description: Date the listing was posted, parsed from the raw timestamp.
+        tests: [not_null]
+      - name: posting_year
+      - name: posting_month
+      - name: posting_quarter
+      - name: listing_season
+        description: Meteorological season (winter/spring/summer/fall) the listing was posted in, Northern Hemisphere.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['winter', 'spring', 'summer', 'fall']
+      - name: days_since_posting
+        description: Days between this listing's posting_date and the most recent posting_date in the whole table — relative to the dataset, not wall-clock, so it stays stable across rebuilds.
+      - name: manufacturer
+        description: Lowercased manufacturer/brand. "unknown" if missing.
+      - name: model
+        description: Lowercased model name. "unknown" if missing.
+      - name: brand_tier
+        description: Hand-rolled tier classification (economy/mainstream/luxury/exotic/unknown) — no external lookup table, a case-statement map in the model.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['economy', 'mainstream', 'luxury', 'exotic', 'unknown']
+      - name: is_luxury_brand
+        description: True when brand_tier is luxury or exotic.
+      - name: is_domestic_us_brand
+      - name: is_import_brand
+      - name: year
+        description: Model year, as reported by the listing.
+      - name: vehicle_age_years
+        description: posting_date's year minus model year, floored at 0. Relative to the listing date, not today's date.
+      - name: age_bucket
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['new', 'recent', 'mid', 'old', 'very_old']
+      - name: odometer_miles
+      - name: mileage_bucket
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['unknown', 'low', 'moderate', 'high', 'very_high']
+      - name: miles_per_year
+        description: odometer_miles / vehicle_age_years, null when age is 0 (can't divide).
+      - name: is_high_mileage_for_age
+        description: True when odometer_miles exceeds a rough 15,000 mi/year expectation for the car's age.
+      - name: is_missing_odometer
+      - name: price_usd
+        description: Listing price in USD, already filtered > 0 upstream (stg_used_car_listings).
+        tests: [not_null]
+      - name: price_bucket
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['budget', 'economy', 'mid', 'premium', 'luxury']
+      - name: price_per_mile
+        description: price_usd / odometer_miles — a rough value-density signal.
+      - name: price_zscore_by_manufacturer
+        description: How many standard deviations this listing's price is from its own manufacturer's mean price (window function over manufacturer).
+      - name: is_price_outlier
+        description: True when |price_zscore_by_manufacturer| > 3.
+      - name: fx_rate_at_post_date
+        description: Banxico series SF43718 (FIX rate, pesos/USD) on this listing's posting_date, forward-filled from the last banking day.
+      - name: inpc_index_at_post
+        description: Banxico series SP1 (INPC) covering this listing's posting_date, forward-filled from the last published month.
+      - name: inpc_index_latest
+        description: The most recent INPC value in the whole FX/INPC reference table as of the last enrich/run.py build — a build-time constant, not a live figure.
+      - name: inpc_reference_period
+        description: Which INPC observation date is "in effect" for this listing's posting_date — surfaced so inpc_index_latest is never mistaken for real-time.
+      - name: price_mxn_nominal_at_post_date
+        description: price_usd * fx_rate_at_post_date — a straight currency conversion, no inflation adjustment.
+      - name: price_mxn_inflation_adjusted
+        description: price_usd * fx_rate_at_post_date * (inpc_index_latest / inpc_index_at_post) — this listing's price restated in today's pesos. The project's headline enrichment.
+      - name: inflation_adjustment_factor
+        description: fx_rate_at_post_date * (inpc_index_latest / inpc_index_at_post) — the multiplier applied to price_usd to get price_mxn_inflation_adjusted.
+      - name: is_fx_fallback_data
+        description: True when this row's FX/INPC values are the flagged constant fallback (BANXICO_TOKEN wasn't set at build time), not real historical Banxico data.
+      - name: fuel_type
+      - name: is_gas
+      - name: is_diesel
+      - name: is_electric
+      - name: is_hybrid
+      - name: is_electric_or_hybrid
+      - name: transmission
+      - name: is_automatic
+      - name: is_manual
+      - name: drive
+      - name: is_4wd
+      - name: is_fwd
+      - name: is_rwd
+      - name: cylinders_numeric
+        description: Cylinder count parsed out of the raw "N cylinders" text, null for "other"/missing.
+      - name: cylinder_bucket
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['unknown', 'low', 'mid', 'high', 'very_high']
+      - name: vehicle_type
+      - name: is_truck
+      - name: is_suv
+      - name: is_sedan
+      - name: is_coupe
+      - name: size
+      - name: condition
+      - name: is_like_new_or_excellent
+      - name: title_status
+      - name: has_clean_title
+      - name: has_vin
+        description: True when the raw VIN was syntactically plausible — the raw VIN string itself is dropped in ingest/clean.py, not carried into the warehouse.
+      - name: paint_color
+      - name: is_missing_manufacturer
+      - name: completeness_score
+        description: Fraction (0-1) of 13 "important" columns that are non-null for this listing — a rough per-row data-quality signal.
