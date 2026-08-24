@@ -2,6 +2,21 @@
 
 Run: streamlit run app/streamlit_app.py
 """
+import sys
+from pathlib import Path
+
+# `streamlit run app/streamlit_app.py` puts this script's own directory
+# (app/) on sys.path, not the repo root -- so `from app.claude_agent import
+# ask` below (and claude_agent.py's own `from app.schema_context import
+# ...` / `from app.sql_tool import ...`) resolve fine when the module ran
+# under `python -m streamlit run ...` from the repo root (cwd lands on
+# sys.path instead) or under pytest (pyproject.toml's `pythonpath = ["."]`),
+# but fail with `ModuleNotFoundError: No module named 'app'` under a bare
+# `streamlit run` -- which is exactly how Streamlit Community Cloud invokes
+# it. Insert the repo root explicitly so every invocation style resolves
+# the same way.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 import os
 
 import streamlit as st
