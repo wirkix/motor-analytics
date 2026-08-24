@@ -2,7 +2,22 @@
 
 Run: streamlit run app/streamlit_app.py
 """
+import os
+
 import streamlit as st
+
+# Streamlit Community Cloud injects deploy-time secrets via st.secrets, not
+# the OS environment — app/claude_agent.py (and python-dotenv locally) reads
+# plain env vars, so bridge the two here rather than touching that module.
+# st.secrets raises StreamlitSecretNotFoundError when no secrets.toml exists
+# anywhere (true for local dev, which uses .env instead) — that's expected,
+# not an error.
+try:
+    for _key in ("ANTHROPIC_API_KEY", "ANTHROPIC_MODEL", "BANXICO_TOKEN"):
+        if _key in st.secrets and not os.getenv(_key):
+            os.environ[_key] = st.secrets[_key]
+except st.errors.StreamlitSecretNotFoundError:
+    pass
 
 from app.claude_agent import ask
 
