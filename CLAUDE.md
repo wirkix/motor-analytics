@@ -127,6 +127,43 @@ Avast interception issue on its own cert check and fails first).
   cost of a small (usually negligible) overshoot past the target `n` when
   there are many tiny groups. Covered by
   `tests/test_clean.py::test_stratified_sample_keeps_rare_manufacturers`.
-- **The committed `.duckdb` is currently built from the synthetic fixture**,
-  not the real Kaggle dataset — see README "Known limitations". Rebuild and
-  recommit once the real CSV + a Banxico token are available.
+- **Avast's HTTPS-scanning proxy also breaks `enrich/run.py`'s Banxico call
+  (`requests`), separately from the dbt/Python-version issue above.** Same
+  root cause (Avast injects a root CA that Windows/browsers trust but
+  Python's `certifi`-backed `requests` doesn't), different symptom —
+  `SSLError: CERTIFICATE_VERIFY_FAILED: unable to get local issuer
+  certificate`, not the Basic-Constraints one, and it's a **handled path**
+  (falls back to flagged constant data per "Banxico enrichment" above), not
+  a hard failure. **Do not fix this by installing `pip-system-certs` in this
+  project's `.venv`** — `anthropic` 1.x already trusts the Windows cert
+  store natively via `httpx2`'s `truststore` dependency, and
+  `pip-system-certs`'s global `ssl.SSLContext` monkeypatch stacks on top of
+  that, crashing every Claude API call with a `RecursionError` inside
+  `truststore/_windows.py` (`pip-system-certs` is fine elsewhere, e.g. for
+  the Kaggle CLI's own separate Python install — just not in this venv,
+  since it also runs `app/claude_agent.py`). The actual fix, scoped to only
+  the `requests` call: export Avast's injected root CA from the Windows
+  cert store, merge it into a copy of `certifi`'s bundle, and pass that via
+  `REQUESTS_CA_BUNDLE` when running `enrich.run` — this only affects
+  `requests`/`urllib3`, leaving `httpx2`/anthropic's own cert handling
+  untouched:
+  ```powershell
+  # one-time export (adjust the -match filter if Avast regenerates its root)
+  $cert = Get-ChildItem Cert:\LocalMachine\Root | Where-Object { $_.Subject -match 'Avast' } | Select-Object -First 1
+  [System.IO.File]::WriteAllBytes("avast_root.cer", $cert.Export("Cert"))
+  certutil -encode avast_root.cer avast_root.pem
+  ```
+  ```bash
+  cat "$(python -c 'import certifi; print(certifi.where())')" avast_root.pem > merged_ca_bundle.pem
+  REQUESTS_CA_BUNDLE=merged_ca_bundle.pem python -m enrich.run
+  ```
+- **`tests/test_clean.py`'s `raw_df` fixture must read
+  `data/fixtures/sample_listings.csv` directly, never
+  `ingest.config.RAW_CSV_PATH`.** `RAW_CSV_PATH` is env-driven and gets
+  pointed at the real ~426k-row Kaggle CSV for a real rebuild (see README
+  Setup) — the real data happens to have zero exact-duplicate `id`s, so
+  `test_fixture_has_exact_duplicate_ids` and `test_dedupe_drops_duplicate_ids`
+  (which assert against the synthetic fixture's deliberately-seeded
+  duplicates) fail if the fixture ever gets swapped for `RAW_CSV_PATH`
+  again. Hardcode the fixture path in the test instead of trusting whatever
+  `.env` currently points to.

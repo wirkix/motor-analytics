@@ -162,11 +162,11 @@ agent knows). Broad strokes:
 ## Known limitations
 
 - **The committed `.duckdb` reflects whichever dataset it was last built
-  against.** Until the real Kaggle CSV + a real Banxico token are used for
-  a build, the checked-in file is built from the ~150-row synthetic fixture
-  with fallback FX/INPC data — enough to make the app fully runnable and
-  demoable, but not the real ~50k-listing table the project is designed
-  for. Rebuild (see Setup) once both inputs are available.
+  against.** As of 2026-08-23 it's built from the real Kaggle CSV
+  (~50k-listing stratified sample) with real Banxico FX/INPC data — not the
+  synthetic fixture. If you rebuild locally without both `RAW_CSV_PATH` and
+  `BANXICO_TOKEN` set in `.env`, you'll silently get the fixture/fallback
+  version back; check `is_fx_fallback_data` before recommitting.
 - **The Kaggle dataset is Craigslist listings, all USD-denominated** — the
   MXN enrichment converts/inflation-adjusts USD prices rather than working
   from native Mexican listings. That's intentional (a public, richly
