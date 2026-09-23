@@ -53,3 +53,19 @@ def test_run_sql_executes_against_the_committed_duckdb_file():
 def test_run_sql_rejects_write_before_touching_the_database():
     with pytest.raises(ValueError):
         run_sql("delete from main_marts.fct_used_car_listing")
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "select * from read_text('README.md')",
+        "select * from read_csv('.env')",
+        "select * from 'https://example.com/x.csv'",
+    ],
+)
+def test_run_sql_blocks_file_and_network_reads(sql):
+    # These pass _guard (plain SELECTs, no forbidden keyword) -- the
+    # connection's enable_external_access=False is what has to stop them.
+    _guard(sql)
+    with pytest.raises(Exception, match="(?i)permission|disabled"):
+        run_sql(sql)

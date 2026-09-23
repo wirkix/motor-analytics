@@ -4,7 +4,12 @@ wide mart. Defense in depth, in order of what actually stops something bad:
      at the file-lock level no matter what SQL gets past the checks below.
   2. A keyword guard rejects anything that isn't a SELECT/WITH, or that
      contains a write/DDL/PRAGMA keyword anywhere in the query.
-  3. A LIMIT is auto-appended if the query doesn't have one, so a broad
+  3. External access is disabled on the connection (and the setting is
+     locked), so SELECT-shaped file/network readers -- read_text('.env'),
+     read_csv('C:/...'), 'https://...' -- fail with a PermissionException.
+     read_only=True alone does NOT stop these: it only blocks writes to the
+     database file, and none of those function names trip the keyword guard.
+  4. A LIMIT is auto-appended if the query doesn't have one, so a broad
      question can't return the whole table into the chat.
 """
 import re
@@ -61,7 +66,11 @@ def _with_limit(sql: str) -> str:
 def run_sql(sql: str) -> list[dict]:
     _guard(sql)
     sql = _with_limit(sql)
-    con = duckdb.connect(str(DUCKDB_PATH), read_only=True)
+    con = duckdb.connect(
+        str(DUCKDB_PATH),
+        read_only=True,
+        config={"enable_external_access": False, "lock_configuration": True},
+    )
     try:
         result = con.execute(sql)
         columns = [d[0] for d in result.description]
